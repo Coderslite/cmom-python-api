@@ -6,7 +6,7 @@ from fastapi import FastAPI, UploadFile, File
 from pydantic import BaseModel
 from typing import List, Optional
 from dotenv import load_dotenv
-from openai import OpenAI
+import openai  # ✅ Use top-level openai, not OpenAI class
 
 # Load environment variables
 load_dotenv()
@@ -14,13 +14,13 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 if not OPENAI_API_KEY:
     raise RuntimeError("OPENAI_API_KEY is not set")
 
-# ✅ Correct initialization for new OpenAI SDK
-client = OpenAI()  # Will automatically read from env var OPENAI_API_KEY
+# ✅ Assign API key directly
+openai.api_key = OPENAI_API_KEY
 
 app = FastAPI(title="Billing PDF → Merged Schema Extractor")
 
 
-# ✅ Removed RowNumber
+# ✅ Unified row schema
 class UnifiedRow(BaseModel):
     Name: Optional[str] = None
     MemberID: Optional[str] = None
@@ -40,10 +40,7 @@ async def root():
 
 @app.post("/extract")
 async def extract_merged(file: UploadFile = File(...)):
-    """
-    Upload any billing PDF (OHANA / ALOHA / HMSA).
-    Returns: {"status": true/false, "data": [...]}
-    """
+    """Upload any billing PDF (OHANA / ALOHA / HMSA)."""
 
     if not file.filename.lower().endswith(".pdf"):
         return {"status": False, "data": [], "error": "Please upload a PDF"}
@@ -67,7 +64,7 @@ async def extract_merged(file: UploadFile = File(...)):
     if not all_text_lines:
         return {"status": False, "data": []}
 
-    # 2) Heuristic: keep only the main table rows
+    # 2) Heuristic: filter rows
     filtered_lines: List[str] = []
     stop_markers = (
         "AP'S OVERDUE",
@@ -92,7 +89,7 @@ async def extract_merged(file: UploadFile = File(...)):
     if not filtered_lines:
         filtered_lines = all_text_lines
 
-    # 3) Build AI prompt (RowNumber removed from schema)
+    # 3) Build AI prompt
     system_prompt = (
         "You are a precise information extraction engine for billing tables. "
         "You will receive text lines from a PDF (header + rows). "
@@ -104,13 +101,13 @@ We have billing tables from different insurers with slightly different headers.
 Unify each row into this MERGED SCHEMA (use strings; use null if missing):
 
 - Name
-- MemberID                (from MRN#, MRN, or MBR ID #)
-- T1023AuthId             (from 'T1023 AUTH DATE(S)' column; values can be alphanumeric IDs)
-- T1023Range              (from 'DATE RANGE' or 'B/D RANGE' that corresponds to T1023)
-- T1023BillDate           (from 'BILLED' or 'BILL DATE' corresponding to T1023)
-- H0044AuthId             (from 'H0044 AUTH DATE(S)')
-- H0044Range              (from 'DATE RANGE' or 'B/D RANGE' corresponding to H0044)
-- H0044BillDate           (from 'BILLED' or 'BILL DATE' corresponding to H0044)
+- MemberID (from MRN#, MRN, or MBR ID #)
+- T1023AuthId
+- T1023Range
+- T1023BillDate
+- H0044AuthId
+- H0044Range
+- H0044BillDate
 - Paid
 
 IMPORTANT RULES:
@@ -125,7 +122,7 @@ LINES:
 """
 
     try:
-        completion = client.chat.completions.create(
+        completion = openai.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": system_prompt},
