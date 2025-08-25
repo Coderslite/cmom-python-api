@@ -34,3 +34,4 @@ uvicorn==0.30.6
 uvloop==0.21.0
 watchfiles==1.1.0
 websockets==15.0.1
+openai==1.101.0
