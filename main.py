@@ -1,6 +1,7 @@
 import os
 import json
 import re
+import openai
 import pdfplumber
 from fastapi import FastAPI, UploadFile, File
 from pydantic import BaseModel
