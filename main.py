@@ -6,6 +6,7 @@ from fastapi import FastAPI, UploadFile, File
 from pydantic import BaseModel
 from typing import List, Optional
 from dotenv import load_dotenv
+import openai  # ✅ Use top-level openai, not OpenAI class
 
 # Load environment variables
 load_dotenv()
@@ -13,18 +14,8 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 if not OPENAI_API_KEY:
     raise RuntimeError("OPENAI_API_KEY is not set")
 
-# ✅ Use the legacy import approach for compatibility
-try:
-    from openai import OpenAI
-
-    client = OpenAI(api_key=OPENAI_API_KEY)
-    OPENAI_LEGACY = False
-except ImportError:
-    # Fallback to legacy version
-    import openai
-
-    openai.api_key = OPENAI_API_KEY
-    OPENAI_LEGACY = True
+# ✅ Assign API key directly
+openai.api_key = OPENAI_API_KEY
 
 app = FastAPI(title="Billing PDF → Merged Schema Extractor")
 
@@ -44,7 +35,7 @@ class UnifiedRow(BaseModel):
 
 @app.get("/debug")
 async def debug():
-    return {"openai_legacy": OPENAI_LEGACY, "api_key_set": bool(OPENAI_API_KEY)}
+    return {"openai_version": openai.__version__}
 
 
 @app.get("/")
@@ -136,32 +127,16 @@ LINES:
 """
 
     try:
-        if OPENAI_LEGACY:
-            # Legacy OpenAI API
-            import openai
-
-            completion = openai.ChatCompletion.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_instructions},
-                ],
-                temperature=0,
-            )
-            content = completion.choices[0].message.content
-        else:
-            # New OpenAI API
-            completion = client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_instructions},
-                ],
-                response_format={"type": "json_object"},
-                temperature=0,
-            )
-            content = completion.choices[0].message.content
-
+        completion = openai.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_instructions},
+            ],
+            response_format={"type": "json_object"},
+            temperature=0,
+        )
+        content = completion.choices[0].message.content
         data = json.loads(content)
         rows = data.get("rows", [])
     except Exception as e:
