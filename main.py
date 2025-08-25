@@ -6,7 +6,7 @@ from fastapi import FastAPI, UploadFile, File
 from pydantic import BaseModel
 from typing import List, Optional
 from dotenv import load_dotenv
-import openai  # ✅ Use top-level openai, not OpenAI class
+from openai import OpenAI  # ✅ New OpenAI client
 
 # Load environment variables
 load_dotenv()
@@ -14,9 +14,10 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 if not OPENAI_API_KEY:
     raise RuntimeError("OPENAI_API_KEY is not set")
 
-# ✅ Assign API key directly
-openai.api_key = OPENAI_API_KEY
+# ✅ Initialize OpenAI client
+client = OpenAI(api_key=OPENAI_API_KEY)
 
+# ✅ FastAPI app
 app = FastAPI(title="Billing PDF → Merged Schema Extractor")
 
 
@@ -35,7 +36,8 @@ class UnifiedRow(BaseModel):
 
 @app.get("/debug")
 async def debug():
-    return {"openai_version": openai.__version__}
+    """Check versions"""
+    return {"openai_version": client.__class__.__name__}
 
 
 @app.get("/")
@@ -127,7 +129,7 @@ LINES:
 """
 
     try:
-        completion = openai.chat.completions.create(
+        completion = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": system_prompt},
@@ -142,6 +144,7 @@ LINES:
     except Exception as e:
         return {"status": False, "data": [], "error": f"AI extraction failed: {e}"}
 
+    # 4) Normalize
     normalized: List[UnifiedRow] = [UnifiedRow(**r) for r in rows]
 
     return {"status": True, "data": [row.dict() for row in normalized]}
