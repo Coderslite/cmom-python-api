@@ -6,7 +6,6 @@ from fastapi import FastAPI, UploadFile, File
 from pydantic import BaseModel
 from typing import List, Optional
 from dotenv import load_dotenv
-from openai import OpenAI  # ✅ Use the new client class
 
 # Load environment variables
 load_dotenv()
@@ -14,8 +13,18 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 if not OPENAI_API_KEY:
     raise RuntimeError("OPENAI_API_KEY is not set")
 
-# ✅ Initialize the client properly
-client = OpenAI(api_key=OPENAI_API_KEY)
+# ✅ Use the legacy import approach for compatibility
+try:
+    from openai import OpenAI
+
+    client = OpenAI(api_key=OPENAI_API_KEY)
+    OPENAI_LEGACY = False
+except ImportError:
+    # Fallback to legacy version
+    import openai
+
+    openai.api_key = OPENAI_API_KEY
+    OPENAI_LEGACY = True
 
 app = FastAPI(title="Billing PDF → Merged Schema Extractor")
 
@@ -33,6 +42,11 @@ class UnifiedRow(BaseModel):
     Paid: Optional[str] = None
 
 
+@app.get("/debug")
+async def debug():
+    return {"openai_legacy": OPENAI_LEGACY, "api_key_set": bool(OPENAI_API_KEY)}
+
+
 @app.get("/")
 async def root():
     return {"status": True, "message": "Billing PDF API is running 🚀"}
@@ -45,7 +59,7 @@ async def extract_merged(file: UploadFile = File(...)):
     if not file.filename.lower().endswith(".pdf"):
         return {"status": False, "data": [], "error": "Please upload a PDF"}
 
-    # 1) Extract text per page (same as before)
+    # 1) Extract text per page
     try:
         all_text_lines: List[str] = []
         with pdfplumber.open(file.file) as pdf:
@@ -64,7 +78,7 @@ async def extract_merged(file: UploadFile = File(...)):
     if not all_text_lines:
         return {"status": False, "data": []}
 
-    # 2) Heuristic: filter rows (same as before)
+    # 2) Heuristic: filter rows
     filtered_lines: List[str] = []
     stop_markers = (
         "AP'S OVERDUE",
@@ -89,7 +103,7 @@ async def extract_merged(file: UploadFile = File(...)):
     if not filtered_lines:
         filtered_lines = all_text_lines
 
-    # 3) Build AI prompt (same as before)
+    # 3) Build AI prompt
     system_prompt = (
         "You are a precise information extraction engine for billing tables. "
         "You will receive text lines from a PDF (header + rows). "
@@ -122,17 +136,32 @@ LINES:
 """
 
     try:
-        # ✅ Use the client properly with the new syntax
-        completion = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_instructions},
-            ],
-            response_format={"type": "json_object"},
-            temperature=0,
-        )
-        content = completion.choices[0].message.content
+        if OPENAI_LEGACY:
+            # Legacy OpenAI API
+            import openai
+
+            completion = openai.ChatCompletion.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_instructions},
+                ],
+                temperature=0,
+            )
+            content = completion.choices[0].message.content
+        else:
+            # New OpenAI API
+            completion = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_instructions},
+                ],
+                response_format={"type": "json_object"},
+                temperature=0,
+            )
+            content = completion.choices[0].message.content
+
         data = json.loads(content)
         rows = data.get("rows", [])
     except Exception as e:
