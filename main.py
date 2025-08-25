@@ -32,9 +32,11 @@ class UnifiedRow(BaseModel):
     H0044BillDate: Optional[str] = None
     Paid: Optional[str] = None
 
+
 @app.get("/debug")
 async def debug():
     return {"openai_version": openai.__version__}
+
 
 @app.get("/")
 async def root():
@@ -44,7 +46,6 @@ async def root():
 @app.post("/extract")
 async def extract_merged(file: UploadFile = File(...)):
     """Upload any billing PDF (OHANA / ALOHA / HMSA)."""
-
     if not file.filename.lower().endswith(".pdf"):
         return {"status": False, "data": [], "error": "Please upload a PDF"}
 
@@ -125,7 +126,7 @@ LINES:
 """
 
     try:
-        completion = openai.chat.completions.create(
+        completion = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": system_prompt},
