@@ -6,7 +6,7 @@ from fastapi import FastAPI, UploadFile, File
 from pydantic import BaseModel
 from typing import List, Optional
 from dotenv import load_dotenv
-import openai  # ✅ Use top-level openai, not OpenAI class
+from openai import OpenAI  # Use OpenAI class explicitly
 
 # Load environment variables
 load_dotenv()
@@ -14,13 +14,13 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 if not OPENAI_API_KEY:
     raise RuntimeError("OPENAI_API_KEY is not set")
 
-# ✅ Assign API key directly
-openai.api_key = OPENAI_API_KEY
+# Initialize OpenAI client explicitly
+client = OpenAI(api_key=OPENAI_API_KEY)
 
 app = FastAPI(title="Billing PDF → Merged Schema Extractor")
 
 
-# ✅ Unified row schema
+# Unified row schema
 class UnifiedRow(BaseModel):
     Name: Optional[str] = None
     MemberID: Optional[str] = None
