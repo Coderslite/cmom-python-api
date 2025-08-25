@@ -32,6 +32,9 @@ class UnifiedRow(BaseModel):
     H0044BillDate: Optional[str] = None
     Paid: Optional[str] = None
 
+@app.get("/debug")
+async def debug():
+    return {"openai_version": openai.__version__}
 
 @app.get("/")
 async def root():
