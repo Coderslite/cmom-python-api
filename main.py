@@ -2,18 +2,20 @@ import os
 import json
 import re
 import pdfplumber
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File
 from pydantic import BaseModel
 from typing import List, Optional
 from dotenv import load_dotenv
 from openai import OpenAI
 
+# Load environment variables
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 if not OPENAI_API_KEY:
     raise RuntimeError("OPENAI_API_KEY is not set")
 
-client = OpenAI(api_key=OPENAI_API_KEY)
+# ✅ Correct initialization for new OpenAI SDK
+client = OpenAI()  # Will automatically read from env var OPENAI_API_KEY
 
 app = FastAPI(title="Billing PDF → Merged Schema Extractor")
 
@@ -34,6 +36,7 @@ class UnifiedRow(BaseModel):
 @app.get("/")
 async def root():
     return {"status": True, "message": "Billing PDF API is running 🚀"}
+
 
 @app.post("/extract")
 async def extract_merged(file: UploadFile = File(...)):
@@ -137,8 +140,6 @@ LINES:
     except Exception as e:
         return {"status": False, "data": [], "error": f"AI extraction failed: {e}"}
 
-    normalized: List[UnifiedRow] = []
-    for r in rows:
-        normalized.append(UnifiedRow(**r))
+    normalized: List[UnifiedRow] = [UnifiedRow(**r) for r in rows]
 
     return {"status": True, "data": [row.dict() for row in normalized]}
