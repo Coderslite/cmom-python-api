@@ -14,9 +14,6 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 if not OPENAI_API_KEY:
     raise RuntimeError("OPENAI_API_KEY is not set")
 
-# ✅ Initialize OpenAI client
-client = OpenAI(api_key=OPENAI_API_KEY)
-
 # ✅ FastAPI app
 app = FastAPI(title="Billing PDF → Merged Schema Extractor")
 
@@ -37,7 +34,7 @@ class UnifiedRow(BaseModel):
 @app.get("/debug")
 async def debug():
     """Check versions"""
-    return {"openai_version": client.__class__.__name__}
+    return {"openai_version": OpenAI.__name__}  # Use class name directly
 
 
 @app.get("/")
@@ -51,6 +48,9 @@ async def extract_merged(file: UploadFile = File(...)):
 
     if not file.filename.lower().endswith(".pdf"):
         return {"status": False, "data": [], "error": "Please upload a PDF"}
+
+    # Initialize OpenAI client inside the endpoint
+    client = OpenAI(api_key=OPENAI_API_KEY)
 
     # 1) Extract text per page
     try:
