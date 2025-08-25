@@ -6,7 +6,7 @@ from fastapi import FastAPI, UploadFile, File
 from pydantic import BaseModel
 from typing import List, Optional
 from dotenv import load_dotenv
-import openai  # ✅ Use top-level openai, not OpenAI class
+from openai import OpenAI  # ✅ Use the new client class
 
 # Load environment variables
 load_dotenv()
@@ -14,8 +14,8 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 if not OPENAI_API_KEY:
     raise RuntimeError("OPENAI_API_KEY is not set")
 
-# ✅ Assign API key directly
-openai.api_key = OPENAI_API_KEY
+# ✅ Initialize the client properly
+client = OpenAI(api_key=OPENAI_API_KEY)
 
 app = FastAPI(title="Billing PDF → Merged Schema Extractor")
 
@@ -33,11 +33,6 @@ class UnifiedRow(BaseModel):
     Paid: Optional[str] = None
 
 
-@app.get("/debug")
-async def debug():
-    return {"openai_version": openai.__version__}
-
-
 @app.get("/")
 async def root():
     return {"status": True, "message": "Billing PDF API is running 🚀"}
@@ -50,7 +45,7 @@ async def extract_merged(file: UploadFile = File(...)):
     if not file.filename.lower().endswith(".pdf"):
         return {"status": False, "data": [], "error": "Please upload a PDF"}
 
-    # 1) Extract text per page
+    # 1) Extract text per page (same as before)
     try:
         all_text_lines: List[str] = []
         with pdfplumber.open(file.file) as pdf:
@@ -69,7 +64,7 @@ async def extract_merged(file: UploadFile = File(...)):
     if not all_text_lines:
         return {"status": False, "data": []}
 
-    # 2) Heuristic: filter rows
+    # 2) Heuristic: filter rows (same as before)
     filtered_lines: List[str] = []
     stop_markers = (
         "AP'S OVERDUE",
@@ -94,7 +89,7 @@ async def extract_merged(file: UploadFile = File(...)):
     if not filtered_lines:
         filtered_lines = all_text_lines
 
-    # 3) Build AI prompt
+    # 3) Build AI prompt (same as before)
     system_prompt = (
         "You are a precise information extraction engine for billing tables. "
         "You will receive text lines from a PDF (header + rows). "
@@ -127,7 +122,8 @@ LINES:
 """
 
     try:
-        completion = openai.chat.completions.create(
+        # ✅ Use the client properly with the new syntax
+        completion = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": system_prompt},
